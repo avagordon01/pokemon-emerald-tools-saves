@@ -3,6 +3,7 @@
 this repo contains:
 - tool for validating pokemon emerald saves
 - script for moving pokemon emerald saves between lemuroid (android) and mgba (linux) and back again
+  - note: to definitely save in-game in lemuroid, you have to same using "start > SAVE" *and* then close lemuroid with "... > Quit"
 - script/instructions for duplicating a save and using mgba multiplayer to trade with yourself (in `self-trade.sh`)
 - my pokemon emerald saves
 
