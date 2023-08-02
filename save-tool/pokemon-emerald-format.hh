@@ -56,23 +56,12 @@ static_assert(offsetof(section_game_state, _6) == 0x040B + 1);
 static_assert(offsetof(section_game_state, _7) == 0x049A + 1);
 
 #include "crc16_ccitt_table.hh"
-/*
 uint16_t crc16(std::span<uint8_t> data) {
     uint16_t v2 = 0x1121;
     for (auto x: data) {
         v2 = crc16_ccitt_table_16[(v2 ^ x) % 256] ^ (v2 >> 8);
     }
     return ~v2;
-}
-*/
-unsigned int crc16(std::span<uint8_t> data) {
-    unsigned int v2; // r2
-    unsigned int i; // r3
-
-    v2 = 0x1121; // This is the seed
-    for ( i = 0; i < data.size(); i = (i + 1) & 0xFFFF )
-        v2 = *(uint16_t *)((char *)crc16_ccitt_table_8 + (2 * (v2 ^ *(uint8_t *)(data.data() + i)) & 0x1FF)) ^ (v2 >> 8);
-    return ~v2 & 0xFFFF;
 }
 /*
 struct [[gnu::packed]] berry {
