@@ -127,7 +127,6 @@ struct section {
     void check() {
         check_m(section_id < 14);
         check_m(signature == 0x08012025UL);
-        std::cout << checksum << " == " << calculate_checksum() << std::endl;
         check_m(checksum == calculate_checksum());
     }
 };
@@ -282,10 +281,7 @@ struct pokemon_emerald_format {
             d->icon = mg.icon;
             d->event_script = mg.event_script;
         }
-        std::cout << "old checksum: " << s.checksum << std::endl;
-        std::cout << "calculated checksum: " << s.calculate_checksum() << std::endl;
         s.checksum = s.calculate_checksum();
-        std::cout << "new checksum: " << s.checksum << std::endl;
     }
 };
 
