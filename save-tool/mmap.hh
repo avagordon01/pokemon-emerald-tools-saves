@@ -17,7 +17,7 @@ struct mmap_file {
     mmap_file(std::string filename_):
         filename(filename_)
     {
-        fd = open(filename.c_str(), O_RDONLY);
+        fd = open(filename.c_str(), O_RDWR);
         if (fd < 0) {
             throw std::runtime_error(filename + ": " + strerror(errno));
         }
@@ -27,7 +27,7 @@ struct mmap_file {
             throw std::runtime_error(filename + ": " + strerror(errno));
         }
         size_t len = st.st_size;
-        void* addr = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
+        void* addr = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         if (addr == MAP_FAILED) {
             throw std::runtime_error(filename + ": " + strerror(errno));
         }

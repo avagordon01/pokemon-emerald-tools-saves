@@ -57,4 +57,9 @@ using mystery gifts you can access (/catch): [Faraway Island](https://bulbapedia
 
 do `gift-tool save-file mystery-gift-file`
 
+e.g. ```./gift-tool \
+  'Pokemon - Emerald Version (USA, Europe).srm' \
+  'EventsGallery/Unreleased/Gen 3/ENG/Wondercards/E - Item Old Sea Map (debug)(ENG).wc3'
+```
+
 get the mystery gift files from here https://github.com/projectpokemon/EventsGallery/blob/master/Released/Gen%203/ENG/Wondercards/ make sure to choose one that matches your game version E for Emerald, FL for Fire Red or Leaf Green, RS for Ruby or Sapphire (untested)
