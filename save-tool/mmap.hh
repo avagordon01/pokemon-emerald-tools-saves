@@ -14,7 +14,7 @@ struct mmap_file {
     std::span<std::byte> data;
     std::string filename;
     int fd;
-    mmap_file(std::string filename_):
+    mmap_file(std::string filename_, bool writable = true):
         filename(filename_)
     {
         fd = open(filename.c_str(), O_RDWR);
@@ -27,7 +27,7 @@ struct mmap_file {
             throw std::runtime_error(filename + ": " + strerror(errno));
         }
         size_t len = st.st_size;
-        void* addr = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        void* addr = mmap(NULL, len, PROT_READ | PROT_WRITE, writable ? MAP_SHARED : MAP_PRIVATE, fd, 0);
         if (addr == MAP_FAILED) {
             throw std::runtime_error(filename + ": " + strerror(errno));
         }

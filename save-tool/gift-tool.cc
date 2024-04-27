@@ -8,25 +8,6 @@
 #include <string>
 #include <cassert>
 
-void check_m_f(bool x, std::string x_str) {
-    if (!x) {
-        using namespace std::string_literals;
-        std::string error = "failed! "s + x_str + " is false"s;
-        throw std::runtime_error(error);
-    }
-}
-
-#define check_m(x) check_m_f(x, #x)
-
-template<typename A>
-std::span<A> span_cast(std::span<std::byte> x) {
-    assert(x.size() >= sizeof(A));
-    return std::span<A>(
-        reinterpret_cast<A*>(x.data()),
-        x.size() / sizeof(A)
-    );
-}
-
 #include "pokemon-emerald-format.hh"
 
 int main(int argc, char* argv[]) {
@@ -42,7 +23,7 @@ int main(int argc, char* argv[]) {
     try {
         f0.check();
         std::cout << "good pokemon " << f0.get_game_name() << " save file: " << filename0 << std::endl;
-    } catch (std::runtime_error e) {
+    } catch (const std::runtime_error& e) {
         std::cout << "error in " << filename0 << ": " << e.what() << std::endl;
     }
     std::string filename1 = args[1];
@@ -52,7 +33,7 @@ int main(int argc, char* argv[]) {
     try {
         f1.check();
         std::cout << "good mystery gift file: " << filename1 << std::endl;
-    } catch (std::runtime_error e) {
+    } catch (const std::runtime_error& e) {
         std::cout << "error in " << filename1 << ": " << e.what() << std::endl;
     }
     std::cout << "writing mystery gift to save" << std::endl;

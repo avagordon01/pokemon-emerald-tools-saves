@@ -3,6 +3,31 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "util.hh"
+
+enum game_version : uint32_t {
+    ruby_sapphire,
+    leafgreen_firered,
+    emerald,
+};
+
+std::ostream& operator<<(std::ostream& os, enum game_version gv) {
+    switch (gv) {
+        case ruby_sapphire:
+            os << "ruby/sapphire";
+            break;
+        case leafgreen_firered:
+            os << "leaf green/fire red";
+            break;
+        case emerald:
+            os << "emerald";
+            break;
+        default:
+            os << "unknown game_version";
+    }
+    return os;
+}
+
 enum section_type : uint16_t {
     trainer_info,
     team_items,
@@ -36,6 +61,25 @@ std::array<size_t, 14> section_lengths = {
     3968,
     2000
 };
+
+struct section_trainer_info {
+    std::array<uint8_t, 0xac> _;
+    uint32_t game_code;
+
+    enum game_version game_version() const {
+        switch (game_code) {
+            case 0x00000000:
+                return game_version::ruby_sapphire;
+            case 0x00000001:
+                return game_version::leafgreen_firered;
+            default:
+                return game_version::emerald;
+        }
+    }
+};
+
+std::array<size_t, 3> team_size_offsets = {0x234, 0x34, 0x234};
+std::array<size_t, 3> team_list_offsets = {0x238, 0x38, 0x238};
 
 struct section_game_state {
     std::array<uint8_t, 0x0405> _0;
@@ -223,6 +267,570 @@ static_assert(offsetof(mystery_gift_save_format_frlg, icon) == 1466);
 static_assert(offsetof(mystery_gift_save_format_frlg, event_script) == 1948);
 
 
+struct pokemon_data_growth {
+    uint16_t species;
+    uint16_t item_held;
+    uint32_t experience;
+    uint8_t pp_bonuses;
+    uint8_t friendship;
+    uint16_t _;
+};
+struct pokemon_data_attacks {
+    std::array<uint16_t, 4> moves;
+    std::array<uint8_t, 4> pp;
+};
+struct pokemon_data_evs_condition {
+    uint8_t hp_ev;
+    uint8_t attack_ev;
+    uint8_t defense_ev;
+    uint8_t speed_ev;
+    uint8_t sp_attack_ev;
+    uint8_t sp_defense_ev;
+    uint8_t coolness;
+    uint8_t beauty;
+    uint8_t cuteness;
+    uint8_t smartness;
+    uint8_t toughness;
+    uint8_t feel;
+};
+struct pokemon_data_misc {
+    uint8_t pokerus;
+    uint8_t met_location;
+    uint16_t origins_info;
+    uint32_t iv_egg_ability;
+    uint32_t ribbons_obedience;
+};
+
+static_assert(sizeof(pokemon_data_growth) == 12);
+static_assert(sizeof(pokemon_data_attacks) == 12);
+static_assert(sizeof(pokemon_data_evs_condition) == 12);
+static_assert(sizeof(pokemon_data_misc) == 12);
+
+std::array<std::array<uint8_t, 4>, 24> pokemon_data_orders = {{
+    {0, 1, 2, 3},
+    {0, 1, 3, 2},
+    {0, 2, 1, 3},
+    {0, 2, 3, 1},
+    {0, 3, 1, 2},
+    {0, 3, 2, 1},
+    {1, 0, 2, 3},
+    {1, 0, 3, 2},
+    {1, 2, 0, 3},
+    {1, 2, 3, 0},
+    {1, 3, 0, 2},
+    {1, 3, 2, 0},
+    {2, 0, 1, 3},
+    {2, 0, 3, 1},
+    {2, 1, 0, 3},
+    {2, 1, 3, 0},
+    {2, 3, 0, 1},
+    {2, 3, 1, 0},
+    {3, 0, 1, 2},
+    {3, 0, 2, 1},
+    {3, 1, 0, 2},
+    {3, 1, 2, 0},
+    {3, 2, 0, 1},
+    {3, 2, 1, 0},
+}};
+
+struct pokemon {
+    uint32_t personality;
+    uint32_t original_trainer_id;
+    std::array<char, 10> nickname;
+    uint8_t language;
+    uint8_t misc_flags;
+    std::array<char, 7> original_trainer_name;
+    uint8_t markings;
+    uint16_t checksum;
+    uint16_t _;
+    union {
+        std::array<pokemon_data_growth, 4> data;
+        struct {
+            pokemon_data_growth growth;
+            pokemon_data_attacks attacks;
+            pokemon_data_evs_condition evs_condition;
+            pokemon_data_misc misc;
+        };
+    };
+    uint32_t status_condition;
+    uint8_t level;
+    uint8_t mail_id;
+    uint16_t current_hp;
+    uint16_t total_hp;
+    uint16_t attack;
+    uint16_t defense;
+    uint16_t speed;
+    uint16_t sp_attack;
+    uint16_t sp_defense;
+
+    void decode() {
+        uint8_t index = personality % 24;
+        std::array<uint8_t, 4> order = pokemon_data_orders[index];
+        for (uint8_t i = 0; i < 4; i++) {
+            if (order[i] == i) {
+                continue;
+            } else {
+                std::swap(data[i], data[order[i]]);
+                std::swap(order[i], order[order[i]]);
+            }
+        }
+        uint32_t decryption_key = original_trainer_id ^ personality;
+        xor_bytes(span_bytes<pokemon_data_growth>(std::span(data)), decryption_key);
+    }
+    void check() {
+        std::span<pokemon, 1> s {this, sizeof(pokemon)};
+    }
+};
+
+std::array<const std::string, 441> pokemon_names = {
+    "??????????",
+    "Bulbasaur",
+    "Ivysaur",
+    "Venusaur",
+    "Charmander",
+    "Charmeleon",
+    "Charizard",
+    "Squirtle",
+    "Wartortle",
+    "Blastoise",
+    "Caterpie",
+    "Metapod",
+    "Butterfree",
+    "Weedle",
+    "Kakuna",
+    "Beedrill",
+    "Pidgey",
+    "Pidgeotto",
+    "Pidgeot",
+    "Rattata",
+    "Raticate",
+    "Spearow",
+    "Fearow",
+    "Ekans",
+    "Arbok",
+    "Pikachu",
+    "Raichu",
+    "Sandshrew",
+    "Sandslash",
+    "Nidoran♀",
+    "Nidorina",
+    "Nidoqueen",
+    "Nidoran♂",
+    "Nidorino",
+    "Nidoking",
+    "Clefairy",
+    "Clefable",
+    "Vulpix",
+    "Ninetales",
+    "Jigglypuff",
+    "Wigglytuff",
+    "Zubat",
+    "Golbat",
+    "Oddish",
+    "Gloom",
+    "Vileplume",
+    "Paras",
+    "Parasect",
+    "Venonat",
+    "Venomoth",
+    "Diglett",
+    "Dugtrio",
+    "Meowth",
+    "Persian",
+    "Psyduck",
+    "Golduck",
+    "Mankey",
+    "Primeape",
+    "Growlithe",
+    "Arcanine",
+    "Poliwag",
+    "Poliwhirl",
+    "Poliwrath",
+    "Abra",
+    "Kadabra",
+    "Alakazam",
+    "Machop",
+    "Machoke",
+    "Machamp",
+    "Bellsprout",
+    "Weepinbell",
+    "Victreebel",
+    "Tentacool",
+    "Tentacruel",
+    "Geodude",
+    "Graveler",
+    "Golem",
+    "Ponyta",
+    "Rapidash",
+    "Slowpoke",
+    "Slowbro",
+    "Magnemite",
+    "Magneton",
+    "Farfetch'd",
+    "Doduo",
+    "Dodrio",
+    "Seel",
+    "Dewgong",
+    "Grimer",
+    "Muk",
+    "Shellder",
+    "Cloyster",
+    "Gastly",
+    "Haunter",
+    "Gengar",
+    "Onix",
+    "Drowzee",
+    "Hypno",
+    "Krabby",
+    "Kingler",
+    "Voltorb",
+    "Electrode",
+    "Exeggcute",
+    "Exeggutor",
+    "Cubone",
+    "Marowak",
+    "Hitmonlee",
+    "Hitmonchan",
+    "Lickitung",
+    "Koffing",
+    "Weezing",
+    "Rhyhorn",
+    "Rhydon",
+    "Chansey",
+    "Tangela",
+    "Kangaskhan",
+    "Horsea",
+    "Seadra",
+    "Goldeen",
+    "Seaking",
+    "Staryu",
+    "Starmie",
+    "Mr. Mime",
+    "Scyther",
+    "Jynx",
+    "Electabuzz",
+    "Magmar",
+    "Pinsir",
+    "Tauros",
+    "Magikarp",
+    "Gyarados",
+    "Lapras",
+    "Ditto",
+    "Eevee",
+    "Vaporeon",
+    "Jolteon",
+    "Flareon",
+    "Porygon",
+    "Omanyte",
+    "Omastar",
+    "Kabuto",
+    "Kabutops",
+    "Aerodactyl",
+    "Snorlax",
+    "Articuno",
+    "Zapdos",
+    "Moltres",
+    "Dratini",
+    "Dragonair",
+    "Dragonite",
+    "Mewtwo",
+    "Mew",
+    "Chikorita",
+    "Bayleef",
+    "Meganium",
+    "Cyndaquil",
+    "Quilava",
+    "Typhlosion",
+    "Totodile",
+    "Croconaw",
+    "Feraligatr",
+    "Sentret",
+    "Furret",
+    "Hoothoot",
+    "Noctowl",
+    "Ledyba",
+    "Ledian",
+    "Spinarak",
+    "Ariados",
+    "Crobat",
+    "Chinchou",
+    "Lanturn",
+    "Pichu",
+    "Cleffa",
+    "Igglybuff",
+    "Togepi",
+    "Togetic",
+    "Natu",
+    "Xatu",
+    "Mareep",
+    "Flaaffy",
+    "Ampharos",
+    "Bellossom",
+    "Marill",
+    "Azumarill",
+    "Sudowoodo",
+    "Politoed",
+    "Hoppip",
+    "Skiploom",
+    "Jumpluff",
+    "Aipom",
+    "Sunkern",
+    "Sunflora",
+    "Yanma",
+    "Wooper",
+    "Quagsire",
+    "Espeon",
+    "Umbreon",
+    "Murkrow",
+    "Slowking",
+    "Misdreavus",
+    "Unown",
+    "Wobbuffet",
+    "Girafarig",
+    "Pineco",
+    "Forretress",
+    "Dunsparce",
+    "Gligar",
+    "Steelix",
+    "Snubbull",
+    "Granbull",
+    "Qwilfish",
+    "Scizor",
+    "Shuckle",
+    "Heracross",
+    "Sneasel",
+    "Teddiursa",
+    "Ursaring",
+    "Slugma",
+    "Magcargo",
+    "Swinub",
+    "Piloswine",
+    "Corsola",
+    "Remoraid",
+    "Octillery",
+    "Delibird",
+    "Mantine",
+    "Skarmory",
+    "Houndour",
+    "Houndoom",
+    "Kingdra",
+    "Phanpy",
+    "Donphan",
+    "Porygon2",
+    "Stantler",
+    "Smeargle",
+    "Tyrogue",
+    "Hitmontop",
+    "Smoochum",
+    "Elekid",
+    "Magby",
+    "Miltank",
+    "Blissey",
+    "Raikou",
+    "Entei",
+    "Suicune",
+    "Larvitar",
+    "Pupitar",
+    "Tyranitar",
+    "Lugia",
+    "Ho-Oh",
+    "Celebi",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+    "Treecko",
+    "Grovyle",
+    "Sceptile",
+    "Torchic",
+    "Combusken",
+    "Blaziken",
+    "Mudkip",
+    "Marshtomp",
+    "Swampert",
+    "Poochyena",
+    "Mightyena",
+    "Zigzagoon",
+    "Linoone",
+    "Wurmple",
+    "Silcoon",
+    "Beautifly",
+    "Cascoon",
+    "Dustox",
+    "Lotad",
+    "Lombre",
+    "Ludicolo",
+    "Seedot",
+    "Nuzleaf",
+    "Shiftry",
+    "Nincada",
+    "Ninjask",
+    "Shedinja",
+    "Taillow",
+    "Swellow",
+    "Shroomish",
+    "Breloom",
+    "Spinda",
+    "Wingull",
+    "Pelipper",
+    "Surskit",
+    "Masquerain",
+    "Wailmer",
+    "Wailord",
+    "Skitty",
+    "Delcatty",
+    "Kecleon",
+    "Baltoy",
+    "Claydol",
+    "Nosepass",
+    "Torkoal",
+    "Sableye",
+    "Barboach",
+    "Whiscash",
+    "Luvdisc",
+    "Corphish",
+    "Crawdaunt",
+    "Feebas",
+    "Milotic",
+    "Carvanha",
+    "Sharpedo",
+    "Trapinch",
+    "Vibrava",
+    "Flygon",
+    "Makuhita",
+    "Hariyama",
+    "Electrike",
+    "Manectric",
+    "Numel",
+    "Camerupt",
+    "Spheal",
+    "Sealeo",
+    "Walrein",
+    "Cacnea",
+    "Cacturne",
+    "Snorunt",
+    "Glalie",
+    "Lunatone",
+    "Solrock",
+    "Azurill",
+    "Spoink",
+    "Grumpig",
+    "Plusle",
+    "Minun",
+    "Mawile",
+    "Meditite",
+    "Medicham",
+    "Swablu",
+    "Altaria",
+    "Wynaut",
+    "Duskull",
+    "Dusclops",
+    "Roselia",
+    "Slakoth",
+    "Vigoroth",
+    "Slaking",
+    "Gulpin",
+    "Swalot",
+    "Tropius",
+    "Whismur",
+    "Loudred",
+    "Exploud",
+    "Clamperl",
+    "Huntail",
+    "Gorebyss",
+    "Absol",
+    "Shuppet",
+    "Banette",
+    "Seviper",
+    "Zangoose",
+    "Relicanth",
+    "Aron",
+    "Lairon",
+    "Aggron",
+    "Castform",
+    "Volbeat",
+    "Illumise",
+    "Lileep",
+    "Cradily",
+    "Anorith",
+    "Armaldo",
+    "Ralts",
+    "Kirlia",
+    "Gardevoir",
+    "Bagon",
+    "Shelgon",
+    "Salamence",
+    "Beldum",
+    "Metang",
+    "Metagross",
+    "Regirock",
+    "Regice",
+    "Registeel",
+    "Kyogre",
+    "Groudon",
+    "Rayquaza",
+    "Latias",
+    "Latios",
+    "Jirachi",
+    "Deoxys",
+    "Chimecho",
+    "Pokémon Egg",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+    "Unown",
+};
+
+std::ostream& operator<<(std::ostream& os, const pokemon& p) {
+    os << pokemon_names.at(p.growth.species);
+    return os;
+}
+
+static_assert(sizeof(pokemon) == 100);
 
 struct pokemon_emerald_format {
     game_save a;
