@@ -28,9 +28,29 @@ int main(int argc, char* argv[]) {
             size_t team_list_offset = team_list_offsets[game_version];
             size_t team_size = span_cast<uint32_t>(std::span(team_items_data).subspan(team_size_offset, 4)).front();
             assert(team_size <= 6);
-            auto team_list = span_cast<pokemon>(std::span(team_items_data).subspan(team_list_offset, team_size * sizeof(pokemon)));
+            auto team_list = span_cast<pokemon_party>(std::span(team_items_data).subspan(team_list_offset, team_size * sizeof(pokemon_party)));
+            std::cout << "party:" << std::endl;
             for (auto& pokemon: team_list) {
                 pokemon.decode();
+                pokemon.check();
+                if (pokemon.empty()) {
+                    continue;
+                }
+                std::cout << pokemon << std::endl;
+            }
+
+            auto box_pokemon_data = f.get_latest_game_save().get_section_by_id(section_type::pc_buffer_a).data;
+            auto box_list = span_cast<pokemon_box>(box_pokemon_data);
+            std::cout << "box:" << std::endl;
+            for (auto& pokemon: box_list) {
+                if (pokemon.empty()) {
+                    continue;
+                }
+                pokemon.decode();
+                if (pokemon.empty()) {
+                    continue;
+                }
+                pokemon.check();
                 std::cout << pokemon << std::endl;
             }
         } catch (const std::runtime_error& e) {
