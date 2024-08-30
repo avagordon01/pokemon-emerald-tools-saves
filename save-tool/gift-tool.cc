@@ -8,7 +8,7 @@
 #include <string>
 #include <cassert>
 
-#include "pokemon-emerald-format.hh"
+#include "pokemon-gen3-format.hh"
 
 int main(int argc, char* argv[]) {
     std::vector<std::string> args(argv + 1, argv + argc);
@@ -19,10 +19,10 @@ int main(int argc, char* argv[]) {
     std::string filename0 = args[0];
     auto m0 = mmap_file(filename0);
     auto d0 = m0.data;
-    auto& f0 = *reinterpret_cast<pokemon_emerald_format*>(d0.data());
+    auto& f0 = *reinterpret_cast<pokemon_gen3_format*>(d0.data());
     try {
         f0.check();
-        std::cout << "good pokemon " << f0.get_game_name() << " save file: " << filename0 << std::endl;
+        std::cout << "good pokemon " << f0.game_version() << " save file: " << filename0 << std::endl;
     } catch (const std::runtime_error& e) {
         std::cout << "error in " << filename0 << ": " << e.what() << std::endl;
     }

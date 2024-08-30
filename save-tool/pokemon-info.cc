@@ -7,7 +7,7 @@
 #include <string>
 #include <cassert>
 
-#include "pokemon-emerald-format.hh"
+#include "pokemon-gen3-format.hh"
 #include "util.hh"
 
 int main(int argc, char* argv[]) {
@@ -19,39 +19,35 @@ int main(int argc, char* argv[]) {
             if (d.size() != 32 * 4096) {
                 throw std::runtime_error("wrong save file size");
             }
-            auto f = span_cast<pokemon_emerald_format>(d).front();
+            auto f = span_cast<pokemon_gen3_format>(d).front();
             f.check();
-            auto team_items_data = f.get_latest_game_save().get_section_by_id(section_type::team_items).data;
-            auto game_version = span_cast<section_trainer_info>(f.get_latest_game_save().get_section_by_id(section_type::trainer_info).data).front().game_version();
-            std::cout << game_version << std::endl;
-            size_t team_size_offset = team_size_offsets[game_version];
-            size_t team_list_offset = team_list_offsets[game_version];
-            size_t team_size = span_cast<uint32_t>(std::span(team_items_data).subspan(team_size_offset, 4)).front();
-            assert(team_size <= 6);
-            auto team_list = span_cast<pokemon_party>(std::span(team_items_data).subspan(team_list_offset, team_size * sizeof(pokemon_party)));
-            std::cout << "party:" << std::endl;
-            for (auto& pokemon: team_list) {
-                pokemon.decode();
-                pokemon.check();
-                if (pokemon.empty()) {
-                    continue;
+            auto& save = f.get_latest_game_save();
+            save.check();
+
+            {
+                auto team_items_section = static_cast<section_team_items>(save.get_section_by_id(section_type::team_items));
+                auto game_version = f.game_version();
+                std::cout << "party:" << std::endl;
+                for (auto& pokemon: team_items_section.get_pokemon_party(game_version)) {
+                    pokemon.decode();
+                    pokemon.check();
+                    std::cout << pokemon << std::endl;
                 }
-                std::cout << pokemon << std::endl;
             }
 
-            auto box_pokemon_data = f.get_latest_game_save().get_section_by_id(section_type::pc_buffer_a).data;
-            auto box_list = span_cast<pokemon_box>(box_pokemon_data);
-            std::cout << "box:" << std::endl;
-            for (auto& pokemon: box_list) {
-                if (pokemon.empty()) {
-                    continue;
+            {
+                auto box_pokemon_data = save.get_sections_contiguous(section_type::pc_buffer_a, section_type::pc_buffer_i);
+                auto box_pokemon_span = std::span(box_pokemon_data.begin() + 4, box_pokemon_data.begin() + 4 + 33600);
+                auto box_pokemon = span_cast<pokemon_box>(box_pokemon_span);
+                std::cout << "box:" << std::endl;
+                for (auto& pokemon: box_pokemon) {
+                    if (pokemon.empty()) {
+                        continue;
+                    }
+                    pokemon.decode();
+                    pokemon.check();
+                    std::cout << pokemon << std::endl;
                 }
-                pokemon.decode();
-                if (pokemon.empty()) {
-                    continue;
-                }
-                pokemon.check();
-                std::cout << pokemon << std::endl;
             }
         } catch (const std::runtime_error& e) {
             std::cout << "error in " << filename << ": " << e.what() << std::endl;

@@ -14,19 +14,18 @@ void check_m_f(bool x, std::string x_str) {
 #define check_m(x) check_m_f(x, #x)
 
 template<typename A>
-std::span<A> span_cast(std::span<std::byte> x) {
-    assert(x.size() >= sizeof(A));
-    return std::span<A>(
-        reinterpret_cast<A*>(x.data()),
-        x.size() / sizeof(A)
-    );
-}
-
-template<typename A>
 std::span<std::byte> span_bytes(std::span<A> x) {
     return std::span<std::byte>(
         reinterpret_cast<std::byte*>(x.data()),
         x.size() * sizeof(A)
+    );
+}
+
+template<typename To, typename From>
+std::span<To> span_cast(std::span<From> from) {
+    return std::span<To>(
+        reinterpret_cast<To*>(from.data()),
+        from.size() * sizeof(From) / sizeof(To)
     );
 }
 

@@ -7,7 +7,7 @@
 #include <string>
 #include <cassert>
 
-#include "pokemon-emerald-format.hh"
+#include "pokemon-gen3-format.hh"
 
 int main(int argc, char* argv[]) {
     std::vector<std::string> args(argv + 1, argv + argc);
@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
             if (d.size() != 32 * 4096) {
                 throw std::runtime_error("wrong save file size");
             }
-            auto f = span_cast<pokemon_emerald_format>(d).front();
+            auto f = span_cast<pokemon_gen3_format>(d).front();
             f.check();
             std::cout << "good pokemon save: " << filename << std::endl;
         } catch (const std::runtime_error& e) {

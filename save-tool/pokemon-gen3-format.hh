@@ -14,20 +14,15 @@ enum game_version : uint32_t {
     emerald,
 };
 
+const std::array<std::string, 4> game_version_strings = {
+    "ruby/sapphire",
+    "leaf green/fire red",
+    "emerald",
+    "unknown game_version",
+};
+
 std::ostream& operator<<(std::ostream& os, enum game_version gv) {
-    switch (gv) {
-        case ruby_sapphire:
-            os << "ruby/sapphire";
-            break;
-        case leafgreen_firered:
-            os << "leaf green/fire red";
-            break;
-        case emerald:
-            os << "emerald";
-            break;
-        default:
-            os << "unknown game_version";
-    }
+    os << game_version_strings[std::min(static_cast<size_t>(gv), game_version_strings.size() - 1)];
     return os;
 }
 
@@ -48,7 +43,9 @@ enum section_type : uint16_t {
     pc_buffer_i
 };
 
-std::array<size_t, 14> section_lengths = {
+constexpr auto num_sections = 14;
+
+std::array<size_t, num_sections> section_lengths = {
     3884,
     3968,
     3968,
@@ -64,25 +61,6 @@ std::array<size_t, 14> section_lengths = {
     3968,
     2000
 };
-
-struct section_trainer_info {
-    std::array<uint8_t, 0xac> _;
-    uint32_t game_code;
-
-    enum game_version game_version() const {
-        switch (game_code) {
-            case 0x00000000:
-                return game_version::ruby_sapphire;
-            case 0x00000001:
-                return game_version::leafgreen_firered;
-            default:
-                return game_version::emerald;
-        }
-    }
-};
-
-std::array<size_t, 3> team_size_offsets = {0x234, 0x34, 0x234};
-std::array<size_t, 3> team_list_offsets = {0x238, 0x38, 0x238};
 
 struct section_game_state {
     std::array<uint8_t, 0x0405> _0;
@@ -110,40 +88,15 @@ uint16_t crc16(std::span<uint8_t> data) {
     }
     return ~v2;
 }
-/*
-struct [[gnu::packed]] berry {
-    uint8_t name[7];
-    uint8_t firmness;
-    uint16_t size_mm;
-    uint8_t max_yield;
-    uint8_t min_yield;
-    uint32_t berry_tag_line_1_ROM_offset;
-    uint32_t berry_tag_line_2_ROM_offset;
-    uint8_t growth_time_per_stage_hours;
-    uint8_t flavor[5];
-    uint8_t smoothness;
-    uint8_t _0;
-    uint32_t effect_in_bag;
-    uint8_t _1[14];
-    uint16_t effect_as_held_item;
-    uint32_t checksum;
 
-    void check() {
-        uint8_t* p = reinterpret_cast<uint8_t*>(this);
-        unsigned long c = 0;
-        for (size_t x = 0; x < 0x52C; x++) {
-            if (x < 0xC || x >= 0x14) {
-                c += p[x];
-            }
-        }
-        check_m(checksum == c);
-    }
-};
-static_assert(offsetof(berry, smoothness) == 0x1a);
-static_assert(offsetof(berry, effect_in_bag) == 0x1c);
-static_assert(offsetof(berry, effect_as_held_item) == 0x2e);
-static_assert(sizeof(berry) == 52);
-*/
+uint16_t block_checksum(std::span<uint32_t> data) {
+    uint32_t sum = std::accumulate(data.begin(), data.end(), 0);
+    return sum + (sum >> 16);
+}
+
+uint16_t block_checksum(std::span<std::byte> data) {
+    return block_checksum(span_cast<uint32_t>(data));
+}
 
 struct section {
     std::array<std::byte, 4084> data;
@@ -152,16 +105,17 @@ struct section {
     uint32_t signature;
     uint32_t save_index;
 
+    std::span<std::byte> data_span() {
+        return std::span(data.begin(), data.begin() + section_lengths[section_id]);
+    }
+
     uint16_t calculate_checksum() {
         size_t section_length = section_lengths[section_id];
-        auto s = std::span(data);
-        auto r = span_cast<uint32_t>(s.first(section_length));
-        uint32_t count = std::accumulate(r.begin(), r.end(), 0);
-        uint16_t c = (count & 0xffff) + ((count >> 16) & 0xffff);
-        return c;
+        auto s = std::span(data).first(section_length);
+        return block_checksum(s);
     }
     void check() {
-        check_m(section_id < 14);
+        check_m(section_id < num_sections);
         check_m(signature == 0x08012025UL);
         check_m(checksum == calculate_checksum());
     }
@@ -170,14 +124,14 @@ static_assert(offsetof(section, signature) == 0x0FF8);
 static_assert(sizeof(section) == 4 * 1024);
 
 struct game_save {
-    std::array<section, 14> sections;
+    std::array<section, num_sections> sections;
 
     void check() {
         for (auto& section: sections) {
             section.check();
         }
         bool section_ids_ordered = std::equal(sections.begin() + 1, sections.end(), sections.begin(),
-            [](auto& b, auto& a){ return b.section_id == ((a.section_id + 1) % 14); });
+            [](auto& b, auto& a){ return b.section_id == ((a.section_id + 1) % num_sections); });
         bool section_save_indexes_equal = std::equal(sections.begin() + 1, sections.end(), sections.begin(),
             [](auto& b, auto& a){ return b.save_index == a.save_index; });
         check_m(section_ids_ordered);
@@ -185,9 +139,21 @@ struct game_save {
     }
 
     section& get_section_by_id(section_type id) {
-        section& s = sections[(14 - sections[0].section_id + id) % 14];
+        section& s = sections[(num_sections - sections[0].section_id + id) % num_sections];
         assert(s.section_id == id);
         return s;
+    }
+
+    std::vector<std::byte> get_sections_contiguous(section_type start, section_type end) {
+        end = static_cast<section_type>(end + 1);
+        std::vector<std::byte> all_data;
+        for (section_type i = start; i != end;
+            i = static_cast<section_type>(i + 1)
+        ) {
+            const auto& section_span = get_section_by_id(static_cast<section_type>(i % num_sections)).data_span();
+            std::copy(section_span.begin(), section_span.end(), std::back_inserter(all_data));
+        }
+        return all_data;
     }
 };
 static_assert(sizeof(game_save) == 0xE000);
@@ -313,34 +279,6 @@ std::array<std::array<uint8_t, 4>, 24> pokemon_data_orders = {{
     {0, 1, 2, 3},
     {0, 1, 3, 2},
     {0, 2, 1, 3},
-    {0, 3, 1, 2},
-    {0, 2, 3, 1},
-    {0, 3, 2, 1},
-    {1, 0, 2, 3},
-    {1, 0, 3, 2},
-    {2, 0, 1, 3},
-    {3, 0, 1, 2},
-    {2, 0, 3, 1},
-    {3, 0, 2, 1},
-    {1, 2, 0, 3},
-    {1, 3, 0, 2},
-    {2, 1, 0, 3},
-    {3, 1, 0, 2},
-    {2, 3, 0, 1},
-    {3, 2, 0, 1},
-    {1, 2, 3, 0},
-    {1, 3, 2, 0},
-    {2, 1, 3, 0},
-    {3, 1, 2, 0},
-    {2, 3, 1, 0},
-    {3, 2, 1, 0},
-}};
-
-/*
-std::array<std::array<uint8_t, 4>, 24> pokemon_data_orders = {{
-    {0, 1, 2, 3},
-    {0, 1, 3, 2},
-    {0, 2, 1, 3},
     {0, 2, 3, 1},
     {0, 3, 1, 2},
     {0, 3, 2, 1},
@@ -363,7 +301,6 @@ std::array<std::array<uint8_t, 4>, 24> pokemon_data_orders = {{
     {3, 2, 0, 1},
     {3, 2, 1, 0},
 }};
-*/
 
 struct pokemon_box {
     uint32_t personality;
@@ -386,39 +323,44 @@ struct pokemon_box {
     };
 
     bool empty() {
-        return growth.species == 0 or personality == 0 or checksum == 0xffff;
+        return personality == 0;
     }
 
     void decode() {
         uint8_t index = personality % 24;
         std::array<uint8_t, 4> order = pokemon_data_orders[index];
         for (uint8_t i = 0; i < 4; i++) {
-            if (order[i] == i) {
-                continue;
-            } else {
-                std::swap(data[i], data[order[i]]);
-                std::swap(order[i], order[order[i]]);
+            for (uint8_t j = i + 1; j < 4; j++) {
+                if (order[i] < order[j]) {
+                    continue;
+                } else {
+                    std::swap(data[i], data[j]);
+                    std::swap(order[i], order[j]);
+                }
             }
         }
-        //check_m(std::is_sorted(order.begin(), order.end()));
+        assert(std::is_sorted(order.begin(), order.end()));
         uint32_t decryption_key = original_trainer_id ^ personality;
         xor_bytes(span_bytes<pokemon_data_growth>(std::span(data)), decryption_key);
     }
     void check() {
         std::span<uint16_t, sizeof(data) / sizeof(uint16_t)> s{reinterpret_cast<uint16_t*>(&data), sizeof(data) / sizeof(uint16_t)};
 
-        uint16_t total = 0;
-        for (auto x: s) {
-            total += x;
+        uint16_t sum = std::accumulate(s.begin(), s.end(), 0);
+        if (sum != checksum) {
+            std::cerr << "checksum mismatch! expected " << checksum << " got " << sum << std::endl;
         }
-        assert(total == checksum);
+    }
+
+    uint16_t national_id() const {
+        return internal_to_national(growth.species);
     }
 
     const std::string_view species_name() const {
-        uint16_t national_id = internal_to_national(growth.species);
-        try {
-        return pokemon_names.at(national_id - 1);
-        } catch (const std::exception& e) {
+        const uint16_t n = national_id() - 1;
+        if (n < pokemon_names.size()) {
+            return pokemon_names[n];
+        } else {
             return "error";
         }
     }
@@ -437,25 +379,47 @@ struct pokemon_party: pokemon_box {
 };
 
 std::ostream& operator<<(std::ostream& os, const pokemon_party& p) {
-    const auto internal = p.growth.species;
-    const auto national = internal_to_national(internal);
-    os << "i = " << internal << ", n = " << national << ", " << p.species_name() << std::endl;
-    os << "personality = " << p.personality << ", experience = " << p.growth.experience;
+    os << "level " << static_cast<int>(p.level) << " " << p.species_name();
     return os;
 }
 
 std::ostream& operator<<(std::ostream& os, const pokemon_box& p) {
-    const auto internal = p.growth.species;
-    const auto national = internal_to_national(internal);
-    os << "i = " << internal << ", n = " << national << ", " << p.species_name() << std::endl;
-    os << "personality = " << p.personality << ", experience = " << p.growth.experience;
+    os << p.species_name();
     return os;
 }
 
 static_assert(sizeof(pokemon_party) == 100);
 static_assert(sizeof(pokemon_box) == 80);
 
-struct pokemon_emerald_format {
+std::array<size_t, 3> team_size_offsets = {0x234, 0x34, 0x234};
+std::array<size_t, 3> team_list_offsets = {0x238, 0x38, 0x238};
+
+struct section_trainer_info: public section {
+    enum game_version game_version() {
+        uint32_t game_code = span_cast<uint32_t>(data_span().subspan(0xac, 4)).front();
+        switch (game_code) {
+            case 0x00000000:
+                return game_version::ruby_sapphire;
+            case 0x00000001:
+                return game_version::leafgreen_firered;
+            default:
+                return game_version::emerald;
+        }
+    }
+};
+
+struct section_team_items: public section {
+    std::span<pokemon_party> get_pokemon_party(game_version gv) {
+        size_t team_size_offset = team_size_offsets[gv];
+        size_t team_list_offset = team_list_offsets[gv];
+        size_t team_size = span_cast<uint32_t>(data_span().subspan(team_size_offset, 4)).front();
+        assert(team_size <= 6);
+        auto team_list = span_cast<pokemon_party>(data_span().subspan(team_list_offset, team_size * sizeof(pokemon_party)));
+        return team_list;
+    }
+};
+
+struct pokemon_gen3_format {
     game_save a;
     game_save b;
     std::array<uint8_t, 8192> hall_of_fame;
@@ -477,25 +441,26 @@ struct pokemon_emerald_format {
         }
     }
 
-    std::string get_game_name() {
-        std::byte game_id = get_latest_game_save().get_section_by_id(section_type{0}).data[0xac];
-        if (game_id == std::byte{0}) {
-            return "ruby or sapphire";
-        } else if (game_id == std::byte{1}) {
-            return "fire red or leaf green";
-        } else {
-            return "emerald";
+    enum game_version game_version() {
+        uint8_t game_id = static_cast<uint8_t>(get_latest_game_save().get_section_by_id(section_type{0}).data[0xac]);
+        switch (game_id) {
+            case 0x00:
+                return game_version::ruby_sapphire;
+            case 0x01:
+                return game_version::leafgreen_firered;
+            default:
+                return game_version::emerald;
         }
     }
 
     void write_mystery_gift(mystery_gift_file_format& mg) {
         section& s = get_latest_game_save().get_section_by_id(section_type{4});
-        if (get_game_name() == "fire red or leaf green") {
+        if (game_version() == game_version::leafgreen_firered) {
             auto d = reinterpret_cast<mystery_gift_save_format_frlg*>(s.data.data());
             d->wonder_card = mg.wonder_card;
             d->icon = mg.icon;
             d->event_script = mg.event_script;
-        } else if (get_game_name() == "emerald") {
+        } else if (game_version() == game_version::emerald) {
             auto d = reinterpret_cast<mystery_gift_save_format_emerald*>(s.data.data());
             d->wonder_card = mg.wonder_card;
             d->icon = mg.icon;
@@ -505,6 +470,6 @@ struct pokemon_emerald_format {
     }
 };
 
-static_assert(offsetof(pokemon_emerald_format, a) == 0);
-static_assert(offsetof(pokemon_emerald_format, b) == 0xE000);
-static_assert(sizeof(pokemon_emerald_format) == 128 * 1024);
+static_assert(offsetof(pokemon_gen3_format, a) == 0);
+static_assert(offsetof(pokemon_gen3_format, b) == 0xE000);
+static_assert(sizeof(pokemon_gen3_format) == 128 * 1024);
