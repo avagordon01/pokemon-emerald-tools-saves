@@ -369,6 +369,41 @@ struct pokemon_box {
         return s < 8;
     }
 
+    uint8_t gen() const {
+        uint16_t n = national_id();
+        if (n <= 151) {
+            return 1;
+        } else if (n <= 251) {
+            return 2;
+        } else if (n <= 386) {
+            return 3;
+        }
+    }
+
+    bool legendary() const {
+        uint16_t n = national_id();
+        return
+            (n >= 144 && n <= 146) || n == 150 ||
+            (n >= 243 && n <= 245) || n == 249 || n == 250 ||
+            (n >= 377 && n <= 384);
+    }
+
+    bool mythical() const {
+        uint16_t n = national_id();
+        return
+            n == 151 ||
+            n == 251 ||
+            n == 385 || n == 386;
+    }
+
+    bool starter() const {
+        uint16_t n = national_id();
+        return
+            (n >= 0 && n < 9) ||
+            (n >= 152 && n < 152 + 9) ||
+            (n >= 252 && n < 252 + 9);
+    }
+
     uint16_t national_id() const {
         return internal_to_national(growth.species);
     }
