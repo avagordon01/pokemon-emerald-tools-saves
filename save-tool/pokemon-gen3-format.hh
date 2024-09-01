@@ -302,6 +302,15 @@ std::array<std::array<uint8_t, 4>, 24> pokemon_data_orders = {{
     {3, 2, 1, 0},
 }};
 
+const std::string_view species_name(uint16_t national_id) {
+    const uint16_t n = national_id - 1;
+    if (n < pokemon_names.size()) {
+        return pokemon_names[n];
+    } else {
+        return "error";
+    }
+}
+
 struct pokemon_box {
     uint32_t personality;
     uint32_t original_trainer_id;
@@ -352,19 +361,23 @@ struct pokemon_box {
         }
     }
 
+    bool shiny() const {
+        uint16_t personality_high = (personality >> 16) & 0xffff;
+        uint16_t personality_low = personality & 0xffff;
+        uint16_t secret_id = (original_trainer_id >> 16) & 0xffff;
+        uint16_t s = original_trainer_id ^ secret_id ^ personality_high ^ personality_low;
+        return s < 8;
+    }
+
     uint16_t national_id() const {
         return internal_to_national(growth.species);
     }
 
     const std::string_view species_name() const {
-        const uint16_t n = national_id() - 1;
-        if (n < pokemon_names.size()) {
-            return pokemon_names[n];
-        } else {
-            return "error";
-        }
+        return ::species_name(national_id());
     }
 };
+
 struct pokemon_party: pokemon_box {
     uint32_t status_condition;
     uint8_t level;
@@ -391,9 +404,6 @@ std::ostream& operator<<(std::ostream& os, const pokemon_box& p) {
 static_assert(sizeof(pokemon_party) == 100);
 static_assert(sizeof(pokemon_box) == 80);
 
-std::array<size_t, 3> team_size_offsets = {0x234, 0x34, 0x234};
-std::array<size_t, 3> team_list_offsets = {0x238, 0x38, 0x238};
-
 struct section_trainer_info: public section {
     enum game_version game_version() {
         uint32_t game_code = span_cast<uint32_t>(data_span().subspan(0xac, 4)).front();
@@ -410,6 +420,9 @@ struct section_trainer_info: public section {
 
 struct section_team_items: public section {
     std::span<pokemon_party> get_pokemon_party(game_version gv) {
+        std::array team_size_offsets = {0x234, 0x34, 0x234};
+        std::array team_list_offsets = {0x238, 0x38, 0x238};
+
         size_t team_size_offset = team_size_offsets[gv];
         size_t team_list_offset = team_list_offsets[gv];
         size_t team_size = span_cast<uint32_t>(data_span().subspan(team_size_offset, 4)).front();
