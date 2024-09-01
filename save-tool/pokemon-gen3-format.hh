@@ -7,6 +7,7 @@
 #include "util.hh"
 #include "pokemon-names.hh"
 #include "species-id-conversion.hh"
+#include "pokemon-strings.hh"
 
 enum game_version : uint32_t {
     ruby_sapphire,
@@ -359,6 +360,14 @@ struct pokemon_box {
         if (sum != checksum) {
             std::cerr << "checksum mismatch! expected " << checksum << " got " << sum << std::endl;
         }
+    }
+
+    std::string nickname_str() const {
+        return pokemon_string_to_string(nickname);
+    }
+
+    std::string original_trainer_name_str() const {
+        return pokemon_string_to_string(original_trainer_name);
     }
 
     bool shiny() const {
