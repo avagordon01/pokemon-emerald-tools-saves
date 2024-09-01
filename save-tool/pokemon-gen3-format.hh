@@ -8,6 +8,7 @@
 #include "pokemon-names.hh"
 #include "species-id-conversion.hh"
 #include "pokemon-strings.hh"
+#include "pokemon-levelling.hh"
 
 enum game_version : uint32_t {
     ruby_sapphire,
@@ -370,6 +371,10 @@ struct pokemon_box {
         return pokemon_string_to_string(original_trainer_name);
     }
 
+    uint8_t level() const {
+        return experience_to_level(national_id(), growth.experience);
+    }
+
     bool shiny() const {
         uint16_t personality_high = (personality >> 16) & 0xffff;
         uint16_t personality_low = personality & 0xffff;
@@ -387,6 +392,7 @@ struct pokemon_box {
         } else if (n <= 386) {
             return 3;
         }
+        return -1;
     }
 
     bool legendary() const {
@@ -408,7 +414,7 @@ struct pokemon_box {
     bool starter() const {
         uint16_t n = national_id();
         return
-            (n >= 0 && n < 9) ||
+            (n >= 1 && n < 1 + 9) ||
             (n >= 152 && n < 152 + 9) ||
             (n >= 252 && n < 252 + 9);
     }
@@ -441,7 +447,7 @@ std::ostream& operator<<(std::ostream& os, const pokemon_party& p) {
 }
 
 std::ostream& operator<<(std::ostream& os, const pokemon_box& p) {
-    os << p.species_name();
+    os << "level " << static_cast<int>(p.level()) << " " << p.species_name();
     return os;
 }
 
