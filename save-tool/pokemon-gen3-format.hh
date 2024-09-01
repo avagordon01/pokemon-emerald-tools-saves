@@ -451,6 +451,13 @@ std::ostream& operator<<(std::ostream& os, const pokemon_box& p) {
     return os;
 }
 
+struct sections_pc_buffer {
+    uint32_t current_pc_buffer;
+    std::array<pokemon_box, 420> pc_buffer_pokemon;
+    std::array<std::array<char, 9>, 14> box_names;
+    std::array<char, 14> box_wallpapers;
+};
+
 static_assert(sizeof(pokemon_party) == 100);
 static_assert(sizeof(pokemon_box) == 80);
 

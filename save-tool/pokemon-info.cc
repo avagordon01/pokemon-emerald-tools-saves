@@ -27,8 +27,9 @@ int main(int argc, char* argv[]) {
             {
                 auto team_items_section = static_cast<section_team_items>(save.get_section_by_id(section_type::team_items));
                 auto game_version = f.game_version();
+                auto party_pokemon = team_items_section.get_pokemon_party(game_version);
                 std::cout << "party:" << std::endl;
-                for (auto& pokemon: team_items_section.get_pokemon_party(game_version)) {
+                for (auto& pokemon: party_pokemon) {
                     pokemon.decode();
                     pokemon.check();
                     std::cout << pokemon << std::endl;
@@ -37,10 +38,9 @@ int main(int argc, char* argv[]) {
 
             {
                 auto box_pokemon_data = save.get_sections_contiguous(section_type::pc_buffer_a, section_type::pc_buffer_i);
-                auto box_pokemon_span = std::span(box_pokemon_data.begin() + 4, box_pokemon_data.begin() + 4 + 33600);
-                auto box_pokemon = span_cast<pokemon_box>(box_pokemon_span);
+                auto& pc_buffer_pokemon = span_cast<sections_pc_buffer>(std::span(box_pokemon_data)).front().pc_buffer_pokemon;
                 std::cout << "box:" << std::endl;
-                for (auto& pokemon: box_pokemon) {
+                for (auto& pokemon: pc_buffer_pokemon) {
                     if (pokemon.empty()) {
                         continue;
                     }
