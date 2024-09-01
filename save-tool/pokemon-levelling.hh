@@ -1026,7 +1026,7 @@ uint8_t experience_to_level(uint16_t national_id, uint32_t experience) {
     uint8_t level;
     for (level = 0; level < 100; level++) {
         if (experience < experience_table[level]) {
-            return level - 1;
+            return level;
         }
     }
     return level;
