@@ -83,10 +83,10 @@ static_assert(offsetof(section_game_state, _6) == 0x040B + 1);
 static_assert(offsetof(section_game_state, _7) == 0x049A + 1);
 
 #include "crc16_ccitt_table.hh"
-uint16_t crc16(std::span<uint8_t> data) {
+uint16_t crc16(std::span<std::byte> data) {
     uint16_t v2 = 0x1121;
     for (auto x: data) {
-        v2 = crc16_ccitt_table_16[(v2 ^ x) % 256] ^ (v2 >> 8);
+        v2 = crc16_ccitt_table_16[(v2 ^ static_cast<uint8_t>(x)) % 256] ^ (v2 >> 8);
     }
     return ~v2;
 }
@@ -163,39 +163,47 @@ static_assert(sizeof(game_save) == 0xE000);
 struct mystery_gift_wonder_card {
     uint16_t checksum;
     uint16_t padding;
-    uint16_t event_id;
-    uint16_t default_icon;
-    uint32_t count;
-    uint8_t flag;
-    uint8_t stamp_max;
-    uint8_t title[40];
-    uint8_t subtitle[40];
-    uint8_t contents_line_1[40];
-    uint8_t contents_line_2[40];
-    uint8_t contents_line_3[40];
-    uint8_t contents_line_4[40];
-    uint8_t warning_line_1[40];
-    uint8_t warning_line_2[40];
+    union {
+        struct {
+            uint16_t event_id;
+            uint16_t default_icon;
+            uint32_t count;
+            uint8_t flag;
+            uint8_t stamp_max;
+            std::array<uint8_t, 40> title;
+            std::array<uint8_t, 40> subtitle;
+            std::array<uint8_t, 40> contents_line_1;
+            std::array<uint8_t, 40> contents_line_2;
+            std::array<uint8_t, 40> contents_line_3;
+            std::array<uint8_t, 40> contents_line_4;
+            std::array<uint8_t, 40> warning_line_1;
+            std::array<uint8_t, 40> warning_line_2;
+        };
+        std::array<std::byte, 332> data;
+    };
+    std::array<std::byte, 10> padding0;
+    uint16_t icon;
     void check() {
-        auto s = std::span<uint8_t>(reinterpret_cast<uint8_t*>(this) + 4, 332);
-        check_m(crc16(s) == checksum);
+        check_m(crc16(std::span(data)) == checksum);
     }
 };
+
+static_assert(sizeof(mystery_gift_wonder_card) == 348);
 
 struct mystery_gift_event_script {
     uint16_t checksum;
     uint16_t padding;
-    std::array<uint8_t, 1000> event_script;
+    std::array<std::byte, 1000> event_script;
     void check() {
         check_m(crc16(this->event_script) == checksum);
     }
 };
 
+static_assert(sizeof(mystery_gift_event_script) == 1004);
+
 struct mystery_gift_file_format {
     mystery_gift_wonder_card wonder_card;
-    std::array<uint8_t, 10> padding0;
-    uint16_t icon;
-    std::array<uint8_t, 68> padding1;
+    std::array<std::byte, 68> padding1;
     mystery_gift_event_script event_script;
 
     void check() {
@@ -204,37 +212,27 @@ struct mystery_gift_file_format {
     }
 };
 
-static_assert(sizeof(mystery_gift_file_format::wonder_card) == 336);
-static_assert(sizeof(mystery_gift_file_format::icon) == 2);
-static_assert(sizeof(mystery_gift_file_format::event_script) == 1004);
 static_assert(offsetof(mystery_gift_file_format, wonder_card) == 0);
-static_assert(offsetof(mystery_gift_file_format, icon) == 346);
 static_assert(offsetof(mystery_gift_file_format, event_script) == 416);
 
 struct mystery_gift_save_format_emerald {
-    std::array<uint8_t, 1388> padding0;
+    std::array<std::byte, 1388> padding0;
     mystery_gift_wonder_card wonder_card;
-    std::array<uint8_t, 10> padding1;
-    uint16_t icon;
-    std::array<uint8_t, 480> padding2;
+    std::array<std::byte, 480> padding1;
     mystery_gift_event_script event_script;
 };
 
 static_assert(offsetof(mystery_gift_save_format_emerald, wonder_card) == 1388);
-static_assert(offsetof(mystery_gift_save_format_emerald, icon) == 1734);
 static_assert(offsetof(mystery_gift_save_format_emerald, event_script) == 2216);
 
 struct mystery_gift_save_format_frlg {
-    std::array<uint8_t, 1120> padding0;
+    std::array<std::byte, 1120> padding0;
     mystery_gift_wonder_card wonder_card;
-    std::array<uint8_t, 10> padding1;
-    uint16_t icon;
-    std::array<uint8_t, 480> padding2;
+    std::array<std::byte, 480> padding1;
     mystery_gift_event_script event_script;
 };
 
 static_assert(offsetof(mystery_gift_save_format_frlg, wonder_card) == 1120);
-static_assert(offsetof(mystery_gift_save_format_frlg, icon) == 1466);
 static_assert(offsetof(mystery_gift_save_format_frlg, event_script) == 1948);
 
 
@@ -376,11 +374,9 @@ struct pokemon_box {
     }
 
     bool shiny() const {
-        uint16_t personality_high = (personality >> 16) & 0xffff;
-        uint16_t personality_low = personality & 0xffff;
-        uint16_t secret_id = (original_trainer_id >> 16) & 0xffff;
-        uint16_t s = original_trainer_id ^ secret_id ^ personality_high ^ personality_low;
-        return s < 8;
+        uint32_t x = personality ^ original_trainer_id;
+        uint16_t y = (x >> 16) ^ x;
+        return y < 8;
     }
 
     uint8_t gen() const {
@@ -492,9 +488,9 @@ struct section_team_items: public section {
 struct pokemon_gen3_format {
     game_save a;
     game_save b;
-    std::array<uint8_t, 8192> hall_of_fame;
-    std::array<uint8_t, 4096> mystery_gift;
-    std::array<uint8_t, 4096> recorded_battle;
+    std::array<std::byte, 8192> hall_of_fame;
+    std::array<std::byte, 4096> mystery_gift;
+    std::array<std::byte, 4096> recorded_battle;
 
     void check() {
         if (a.sections.back().save_index != 0xffffffff) {
@@ -512,28 +508,19 @@ struct pokemon_gen3_format {
     }
 
     enum game_version game_version() {
-        uint8_t game_id = static_cast<uint8_t>(get_latest_game_save().get_section_by_id(section_type{0}).data[0xac]);
-        switch (game_id) {
-            case 0x00:
-                return game_version::ruby_sapphire;
-            case 0x01:
-                return game_version::leafgreen_firered;
-            default:
-                return game_version::emerald;
-        }
+        auto trainer_info = static_cast<section_trainer_info>(get_latest_game_save().get_section_by_id(section_type::trainer_info));
+        return trainer_info.game_version();
     }
 
     void write_mystery_gift(mystery_gift_file_format& mg) {
-        section& s = get_latest_game_save().get_section_by_id(section_type{4});
+        section& s = get_latest_game_save().get_section_by_id(section_type::rival_info);
         if (game_version() == game_version::leafgreen_firered) {
             auto d = reinterpret_cast<mystery_gift_save_format_frlg*>(s.data.data());
             d->wonder_card = mg.wonder_card;
-            d->icon = mg.icon;
             d->event_script = mg.event_script;
         } else if (game_version() == game_version::emerald) {
             auto d = reinterpret_cast<mystery_gift_save_format_emerald*>(s.data.data());
             d->wonder_card = mg.wonder_card;
-            d->icon = mg.icon;
             d->event_script = mg.event_script;
         }
         s.checksum = s.calculate_checksum();

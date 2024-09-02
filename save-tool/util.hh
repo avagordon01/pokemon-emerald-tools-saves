@@ -29,6 +29,16 @@ std::span<To> span_cast(std::span<From> from) {
     );
 }
 
+//separate fn required for in-place containers like std::array
+//could use AllocatorAwareContainer concept
+template<typename To, typename From, size_t N>
+std::span<To> span_cast(std::array<From, N>& from) {
+    return std::span<To>(
+        reinterpret_cast<To*>(from.data()),
+        from.size() * sizeof(From) / sizeof(To)
+    );
+}
+
 void xor_bytes(std::span<std::byte> data, std::unsigned_integral auto key) {
     auto resized_data = span_cast<decltype(key)>(data);
     for (auto& word: resized_data) {
