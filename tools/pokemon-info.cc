@@ -32,7 +32,9 @@ int main(int argc, char* argv[]) {
                 for (auto& pokemon: party_pokemon) {
                     pokemon.decode();
                     pokemon.check();
-                    std::cout << pokemon << std::endl;
+                    if (pokemon.legendary() or pokemon.mythical()) {
+                        std::cout << pokemon << std::endl;
+                    }
                 }
             }
 
@@ -46,7 +48,9 @@ int main(int argc, char* argv[]) {
                     }
                     pokemon.decode();
                     pokemon.check();
-                    std::cout << pokemon << std::endl;
+                    if (pokemon.legendary() or pokemon.mythical()) {
+                        std::cout << pokemon << std::endl;
+                    }
                 }
             }
         } catch (const std::runtime_error& e) {
