@@ -47,7 +47,7 @@ this is all based on information from these sources:
 
 saving in lemuroid can be fiddly, especially when pushing saves using `adb push`
 to save in lemuroid (such that you can move the file between emulators/tools/...) make sure you do an in-game save, and "quit" lemuroid
-if that fails, do `adb shell` and `cd /storage/self/primary/Android/data/com.swordfish.lemuroid/files/saves`, and `chmod 666 *.srm` (this is because when you push from `adb shell` it creates the file under a `shell` user rather than whatever user the app is running as, which stops it from being writable)
+if that fails, do `adb shell` and `cd /sdcard/Android/data/com.swordfish.lemuroid/files/saves`, and `chmod 666 *.srm` (this is because when you push from `adb shell` it creates the file under a `shell` user rather than whatever user the app is running as, which stops it from being writable)
 
 you can check if the save was successful by checking the timestamp of the save file with `ls -lh` (in `adb shell`) and making sure it's recent
 

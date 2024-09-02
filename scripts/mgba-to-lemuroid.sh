@@ -10,4 +10,4 @@ sav="Pokemon - Emerald Version (USA, Europe).sav"
 #https://bulbapedia.bulbagarden.net/wiki/Time#Generation_III
 head -c 131072 "${sav}" > "${srm}"
 
-adb push "${srm}" "/storage/self/primary/Android/data/com.swordfish.lemuroid/files/saves"
+adb push "${srm}" "/sdcard/Android/data/com.swordfish.lemuroid/files/saves"
