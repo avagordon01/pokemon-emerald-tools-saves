@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
+#include <utility>
 
 #include "util.hh"
 #include "pokemon-names.hh"
@@ -311,6 +312,51 @@ const std::string_view species_name(uint16_t national_id) {
     }
 }
 
+constexpr std::pair<uint16_t, uint16_t> gen_id_range(uint8_t gen) {
+    if (gen == 1) {
+        return {1, 151};
+    } else if (gen == 2) {
+        return {152, 251};
+    } else if (gen == 3) {
+        return {252, 386};
+    } else {
+        return {};
+    }
+}
+
+constexpr uint8_t gen(uint16_t national_id) {
+    if (national_id <= 151) {
+        return 1;
+    } else if (national_id <= 251) {
+        return 2;
+    } else if (national_id <= 386) {
+        return 3;
+    } else {
+        throw "error";
+    }
+}
+
+constexpr bool legendary(uint16_t national_id) {
+    return
+        (national_id >= 144 && national_id <= 146) || national_id == 150 ||
+        (national_id >= 243 && national_id <= 245) || national_id == 249 || national_id == 250 ||
+        (national_id >= 377 && national_id <= 384);
+}
+
+constexpr bool mythical(uint16_t national_id) {
+    return
+        national_id == 151 ||
+        national_id == 251 ||
+        national_id == 385 || national_id == 386;
+}
+
+constexpr bool starter(uint16_t national_id) {
+    return
+        (national_id >= 1 && national_id < 1 + 9) ||
+        (national_id >= 152 && national_id < 152 + 9) ||
+        (national_id >= 252 && national_id < 252 + 9);
+}
+
 struct pokemon_box {
     uint32_t personality;
     uint32_t original_trainer_id;
@@ -380,39 +426,19 @@ struct pokemon_box {
     }
 
     uint8_t gen() const {
-        uint16_t n = national_id();
-        if (n <= 151) {
-            return 1;
-        } else if (n <= 251) {
-            return 2;
-        } else if (n <= 386) {
-            return 3;
-        }
-        return -1;
+        return ::gen(national_id());
     }
 
     bool legendary() const {
-        uint16_t n = national_id();
-        return
-            (n >= 144 && n <= 146) || n == 150 ||
-            (n >= 243 && n <= 245) || n == 249 || n == 250 ||
-            (n >= 377 && n <= 384);
+        return ::legendary(national_id());
     }
 
     bool mythical() const {
-        uint16_t n = national_id();
-        return
-            n == 151 ||
-            n == 251 ||
-            n == 385 || n == 386;
+        return ::mythical(national_id());
     }
 
     bool starter() const {
-        uint16_t n = national_id();
-        return
-            (n >= 1 && n < 1 + 9) ||
-            (n >= 152 && n < 152 + 9) ||
-            (n >= 252 && n < 252 + 9);
+        return ::starter(national_id());
     }
 
     uint16_t national_id() const {
@@ -468,6 +494,13 @@ struct section_trainer_info: public section {
             default:
                 return game_version::emerald;
         }
+    }
+
+    bool pokedex_owned(uint16_t national_id) {
+        auto i = national_id - 1;
+        auto s = data_span().subspan(0x28, 49);
+        bool owned = static_cast<bool>((s[i >> 3] >> (i & 7)) & std::byte{1});
+        return owned;
     }
 };
 

@@ -5,6 +5,7 @@
 #include <numeric>
 #include <vector>
 #include <string>
+#include <bitset>
 #include <cassert>
 
 #include "pokemon-gen3-format.hh"
@@ -12,6 +13,7 @@
 
 int main(int argc, char* argv[]) {
     std::vector<std::string> args(argv + 1, argv + argc);
+    std::bitset<gen_id_range(3).second + 1> dex;
     for (auto& filename: args) {
         try {
             auto m = mmap_file(filename, false);
@@ -25,6 +27,14 @@ int main(int argc, char* argv[]) {
             save.check();
 
             {
+                auto trainer_info = static_cast<section_trainer_info>(save.get_section_by_id(section_type::trainer_info));
+                for (uint16_t n = gen_id_range(1).first; n <= gen_id_range(3).second; n++) {
+                    if (trainer_info.pokedex_owned(n)) {
+                        dex.set(n);
+                    }
+                }
+            }
+            {
                 auto team_items_section = static_cast<section_team_items>(save.get_section_by_id(section_type::team_items));
                 auto game_version = f.game_version();
                 auto party_pokemon = team_items_section.get_pokemon_party(game_version);
@@ -32,9 +42,8 @@ int main(int argc, char* argv[]) {
                 for (auto& pokemon: party_pokemon) {
                     pokemon.decode();
                     pokemon.check();
-                    if (pokemon.legendary() or pokemon.mythical()) {
-                        std::cout << pokemon << std::endl;
-                    }
+                    dex.set(pokemon.national_id());
+                    std::cout << pokemon << std::endl;
                 }
             }
 
@@ -48,13 +57,34 @@ int main(int argc, char* argv[]) {
                     }
                     pokemon.decode();
                     pokemon.check();
-                    if (pokemon.legendary() or pokemon.mythical()) {
-                        std::cout << pokemon << std::endl;
-                    }
+                    dex.set(pokemon.national_id());
+                    std::cout << pokemon << std::endl;
                 }
             }
         } catch (const std::runtime_error& e) {
             std::cout << "error in " << filename << ": " << e.what() << std::endl;
+        }
+    }
+    std::cout << "all dex:   ";
+    uint16_t size = gen_id_range(3).second - gen_id_range(1).first + 1;
+    std::cout << dex.count() << " / " << size << " = ";
+    std::cout << 100.0f * dex.count() / size << "%" << std::endl;
+    for (uint8_t gen = 1; gen <= 3; gen++) {
+        size_t count = 0;
+        for (size_t i = gen_id_range(gen).first; i <= gen_id_range(gen).second; i++) {
+            count += dex[i];
+        }
+        uint16_t size = gen_id_range(gen).second - gen_id_range(gen).first + 1;
+        std::cout << "gen " << static_cast<int>(gen) << " dex: ";
+        std::cout << count << " / " << size << " = ";
+        std::cout << 100.0f * count / size << "%" << std::endl;
+    }
+    for (uint8_t gen = 1; gen <= 3; gen++) {
+        std::cout << "gen " << static_cast<int>(gen) << " missing:" << std::endl;
+        for (size_t i = gen_id_range(gen).first; i <= gen_id_range(gen).second; i++) {
+            if (!dex[i]) {
+                std::cout << species_name(i) << std::endl;
+            }
         }
     }
 }
