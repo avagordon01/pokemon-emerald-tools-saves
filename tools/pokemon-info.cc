@@ -14,6 +14,7 @@
 int main(int argc, char* argv[]) {
     std::vector<std::string> args(argv + 1, argv + argc);
     std::bitset<gen_id_range(3).second + 1> dex;
+    std::bitset<28> unowns{};
     for (auto& filename: args) {
         try {
             auto m = mmap_file(filename, false);
@@ -43,6 +44,10 @@ int main(int argc, char* argv[]) {
                     pokemon.decode();
                     pokemon.check();
                     dex.set(pokemon.national_id());
+                    const auto uf = pokemon.unown_form();
+                    if (uf) {
+                        unowns.set(*uf);
+                    }
                     std::cout << pokemon << std::endl;
                 }
             }
@@ -58,6 +63,10 @@ int main(int argc, char* argv[]) {
                     pokemon.decode();
                     pokemon.check();
                     dex.set(pokemon.national_id());
+                    const auto uf = pokemon.unown_form();
+                    if (uf) {
+                        unowns.set(*uf);
+                    }
                     std::cout << pokemon << std::endl;
                 }
             }
@@ -87,4 +96,6 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+    std::cout << "unown: " << unowns.count() << " / " << unowns.size() << " = " <<
+        100.0f * unowns.count() / unowns.size() << "%" << std::endl;
 }

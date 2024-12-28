@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <utility>
+#include <optional>
 
 #include "util.hh"
 #include "pokemon-names.hh"
@@ -439,6 +440,20 @@ struct pokemon_box {
 
     bool starter() const {
         return ::starter(national_id());
+    }
+
+    std::optional<char> unown_form() const {
+        // https://bulbapedia.bulbagarden.net/wiki/Personality_value#Unown's_letter
+        if (national_id() != 201) {
+            return std::nullopt;
+        }
+        uint8_t letter = (
+            ((personality >>  0) & 0b00000011) |
+            ((personality >>  6) & 0b00001100) |
+            ((personality >> 12) & 0b00110000) |
+            ((personality >> 18) & 0b11000000)
+        ) % 28;
+        return {letter};
     }
 
     uint16_t national_id() const {
